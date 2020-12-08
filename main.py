@@ -28,7 +28,7 @@ class Request:
 
 class CreateSession(Request):
     sessionKey = None
-    def __init__(self,botqq:int,authKey):str:
+    def __init__(self,botqq:int,authKey:str):
         self.sessionKey = self.httpPost(url+"/auth",json.dumps({"authKey": authKey}))["session"]
         self.httppost(url+"/verify",json.dumps({"sessionKey":self.sessionkey,"qq":botqq}))
     def getSessionKey():
