@@ -1,61 +1,168 @@
 import requests
-import json 
+import json
 import asyncio
 import websockets
 import os
 import configparser
 import redis
+import threading
 
-async def getMessage(wsurl:str,sessionkey:str):
-    async with websockets.connect(str(wsurl)+"/message?sessionKey="+str(sessionkey)) as websocket:
-        message = await websocket.recv()
-        message = json.loads(message)
-        messagedb.toSet(MessageManager.getMessageId(message),message) #redis存入消息
-        MessageManager.announce(messageId,message)
-async def getEvent(wsurl:str,sessionKey:str):
-    async with websockets.connect(str(wsurl)+"/event?sessionKey="+str(sessionkey)) as websocket:
-        event = await websocket.recv()
-        event = json.loads(event)
-        messagedb.toSet(MessageManager.getMessageId(message),message) #redis存入消息
-        EvnetManager.announce(eventId,event)
+plugins = []
 
-class RedisManager():
+
+async def getMessage(wsurl: str, sessionkey: str):
+    async with websockets.connect(str(wsurl) + "/message?sessionKey=" + str(sessionkey)) as websocket:
+        while True:
+            message = await websocket.recv()
+            message = json.loads(message)
+            logger.info("接收到新的消息包:" + message)
+            # messagedb.toSet(MessageManager.getMessageId(message), message)  # redis存入消息
+            await MessageManager.announce(MessageManager.getMessageId(message), message, "Message")
+
+
+async def getEvent(wsurl: str, sessionkey: str):
+    async with websockets.connect(str(wsurl) + "/event?sessionKey=" + str(sessionkey)) as websocket:
+        while True:
+            event = await websocket.recv()
+            event = json.loads(event)
+            logger.info("接收到新的事件包:" + event)
+            # messagedb.toSet(MessageManager.getMessageId(event), event)  # redis存入消息
+            await MessageManager.announce(MessageManager.getMessageId(event), event, "Event")
+
+
+class logger:
+    @staticmethod
+    def info(log):
+        print("[INFO]" + str(log))
+
+    @staticmethod
+    def warn(log):
+        print("[WARN]" + str(log))
+
+
+class RedisManager:
     connection = None
-    def __init__(self,host:str,port:int,db:int=1):
-        self.connection = redis.StrictRedis(host,port,db,decode_responses=True)
-    def toSet(self,key,value,extime=-1):
-        self.connection.set(key,value)
-        self.connection.expire(key,extime)
-    def toGet(self,key):
+
+    def __init__(self, host: str, port: int, db: int = 1):
+        self.connection = redis.StrictRedis(host, port, db, decode_responses=True)
+
+    def toSet(self, key, value, extime=-1):
+        self.connection.set(key, value)
+        self.connection.expire(key, extime)
+
+    def toGet(self, key):
         return self.connection.get(key)
-    def toDel(self,key):
+
+    def toDel(self, key):
         self.connection.delete(key)
-    def isExists(self,key):
+
+    def isExists(self, key):
         return self.connection.exists(key)
+
     def keyLenth(self):
         return self.connection.dbsize()
 
+
 class Request:
-    def httpGet(self,url:str):
+    @staticmethod
+    def httpGet(url: str):
         r = requests.get(url)
         return json.loads(r.text)
-    def httpPost(self,url,postdata:str):
-        r = requests.post(url,data = postdata)
+
+    @staticmethod
+    def httpPost(url, postdata: str):
+        r = requests.post(url, data=postdata)
         return json.loads(r.text)
 
-class CreateSession(Request):
+
+class CreateSession():
     sessionKey = None
-    def __init__(self,botqq:int,authKey:str):
-        self.sessionKey = self.httpPost(url+"/auth",json.dumps({"authKey": authKey}))["session"]
-        self.httppost(url+"/verify",json.dumps({"sessionKey":self.sessionkey,"qq":botqq}))
-    def getSessionKey():
+
+    def __init__(self, botqq: int, authKey: str, url: str):
+        self.sessionKey = Request.httpPost(url=url + "/auth", postdata=json.dumps({"authKey": authKey}))["session"]
+        logger.info("获取到sessionkey:" + self.sessionKey)
+        Request.httpPost(url + "/verify", json.dumps({"sessionKey": self.sessionKey, "qq": botqq}))
+        logger.info("验证sessionkey成功")
+
+    def getSessionKey(self):
         return self.sessionKey
 
+
 class MessageManager:
-    def __init__(self,)
     @staticmethod
     def getMessageId(message):
         if "messageId" in message:
             return message["messageId"]
         elif "messageChain" in message:
             return message["messageChain"][0]["id"]
+
+    @staticmethod
+    async def announce(messageid, message, types):
+        for p in plugins:
+            await p.MessageRecv.onMessage(messageid, message, types)
+
+
+class PluginManager:
+    pluginslist = []
+    pluginloaded = []
+    pluginobj = []
+
+    def __init__(self):
+        for filename in os.listdir("plugins"):
+            if filename.endswith(".py") and not filename.startswith("_"):
+                self.pluginslist.append("plugins." + os.path.splitext(filename)[0])
+                logger.info(self.pluginslist)
+
+    def loadAllPlugin(self):
+        logger.info("开始加载所有插件")
+        for p in self.pluginslist:
+            p_mod = __import__(p, fromlist=[p])
+            p_class = p_mod.getPluginClass()
+            p_obj = p_class()
+            p_obj.onLoad()
+            self.pluginloaded.append(p)
+            self.pluginobj.append(p_obj)
+            # 这里应该有错误处理
+        logger.info("所有插件载入完成")
+
+    def __disableAllPlugin(self):
+        for p_obj in self.pluginobj:
+            p_obj.onDisable()
+            self.pluginobj.remove(p_obj)
+        self.pluginloaded.clear()
+
+    def __loadPlugin(self, pluginname):
+        if pluginname not in self.pluginloaded:
+            p_obj = __import__(pluginname)
+            logger.info("正在载入插件" + pluginname)
+            p_obj.onLoad()
+            logger.info("已载入插件" + pluginname)
+            plugins.append(pluginname)
+        else:
+            pass  # 这里应当引发一个警告
+
+    def __disablePlugin(self, pluginname):
+        if pluginname in self.pluginloaded:
+            logger.info("正在禁用插件", pluginname)
+            p_obj = pluginname.Plugin()
+            p_obj.onDisable()
+            logger.info("已禁用插件", pluginname)
+            plugins.remove(pluginname)
+        else:
+            pass  # 这里应当引发一个警告
+
+
+def main():
+    wsurl = "ws://127.0.0.1:8080"
+    botqq = 2125402216
+    authkey = "6397684399qq"
+    pluginbase = PluginManager()
+    pluginbase.loadAllPlugin()
+    bot = CreateSession(botqq, authkey, "http://127.0.0.1:8080")
+    sessionkey = bot.getSessionKey()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(asyncio.gather(getEvent(wsurl, sessionkey), getMessage(wsurl, sessionkey)))
+    loop.close()
+
+
+main()
