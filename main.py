@@ -5,7 +5,8 @@ import websockets
 import os
 import redis
 
-plugins = []
+pluginloaded = []
+pluginobj = []
 
 
 async def getMessage(wsurl: str, sessionkey: str):
@@ -16,7 +17,7 @@ async def getMessage(wsurl: str, sessionkey: str):
             message = json.loads(message)
             logger.info("接收到新的消息包:" + str(message))
             # messagedb.toSet(MessageManager.getMessageId(message), message)  # redis存入消息
-            await MessageManager.announce(MessageManager.getMessageId(message), message, "Message")
+            MessageManager.announce(MessageManager.getMessageId(message), message, "Message")
 
 
 async def getEvent(wsurl: str, sessionkey: str):
@@ -27,7 +28,7 @@ async def getEvent(wsurl: str, sessionkey: str):
             event = json.loads(event)
             logger.info("接收到新的事件包:" + str(event))
             # messagedb.toSet(MessageManager.getMessageId(event), event)  # redis存入消息
-            await MessageManager.announce(MessageManager.getMessageId(event), event, "Event")
+            MessageManager.announce(MessageManager.getMessageId(event), event, "Event")
 
 
 class logger:
@@ -97,9 +98,11 @@ class MessageManager:
             return message["messageChain"][0]["id"]
 
     @staticmethod
-    async def announce(messageid, message, types):
-        for p in plugins:
-            await p.MessageRecv.onMessage(messageid, message, types)
+    def announce(messageid, message, types):
+        for p in pluginobj:
+            p_class = p.getMessageRecvClass()
+            p_obj = p_class()
+            p_obj.onMessage(messageid, message, types)
 
 
 class PluginManager:
@@ -108,10 +111,14 @@ class PluginManager:
     pluginobj = []
 
     def __init__(self):
-        for filename in os.listdir("plugins"):
+        logger.info("当前工作目录:" + os.getcwd())
+        for filename in os.listdir(os.getcwd()+"\\plugins"):
             if filename.endswith(".py") and not filename.startswith("_"):
                 self.pluginslist.append("plugins." + os.path.splitext(filename)[0])
                 logger.info(self.pluginslist)
+
+    def getPluginobj(self):
+        return self.pluginobj
 
     def loadAllPlugin(self):
         logger.info("开始加载所有插件")
@@ -120,8 +127,8 @@ class PluginManager:
             p_class = p_mod.getPluginClass()
             p_obj = p_class()
             p_obj.onLoad()
-            self.pluginloaded.append(p)
-            self.pluginobj.append(p_obj)
+            pluginloaded.append(p)
+            pluginobj.append(p_mod)
             # 这里应该有错误处理
         logger.info("所有插件载入完成")
 
@@ -137,7 +144,7 @@ class PluginManager:
             logger.info("正在载入插件" + pluginname)
             p_obj.onLoad()
             logger.info("已载入插件" + pluginname)
-            plugins.append(pluginname)
+            pluginloaded.append(pluginname)
         else:
             pass  # 这里应当引发一个警告
 
@@ -147,7 +154,7 @@ class PluginManager:
             p_obj = pluginname.Plugin()
             p_obj.onDisable()
             logger.info("已禁用插件", pluginname)
-            plugins.remove(pluginname)
+            pluginloaded.remove(pluginname)
         else:
             pass  # 这里应当引发一个警告
 
@@ -156,7 +163,11 @@ def main():
     wsurl = "ws://zhouxiang289.f3322.net:8080"
     botqq = 2593267832
     authkey = "6397684399qq"
-    pluginbase = PluginManager()
+    try:
+        pluginbase = PluginManager()
+    except Exception as e:
+        print(e)
+        input()
     pluginbase.loadAllPlugin()
     bot = CreateSession(botqq, authkey, "http://zhouxiang289.f3322.net:8080")
     sessionkey = bot.getSessionKey()
