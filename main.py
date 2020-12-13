@@ -3,29 +3,29 @@ import json
 import asyncio
 import websockets
 import os
-import configparser
 import redis
-import threading
 
 plugins = []
 
 
 async def getMessage(wsurl: str, sessionkey: str):
     async with websockets.connect(str(wsurl) + "/message?sessionKey=" + str(sessionkey)) as websocket:
+        logger.info("开始监听消息")
         while True:
             message = await websocket.recv()
             message = json.loads(message)
-            logger.info("接收到新的消息包:" + message)
+            logger.info("接收到新的消息包:" + str(message))
             # messagedb.toSet(MessageManager.getMessageId(message), message)  # redis存入消息
             await MessageManager.announce(MessageManager.getMessageId(message), message, "Message")
 
 
 async def getEvent(wsurl: str, sessionkey: str):
     async with websockets.connect(str(wsurl) + "/event?sessionKey=" + str(sessionkey)) as websocket:
+        logger.info("开始监听事件")
         while True:
             event = await websocket.recv()
             event = json.loads(event)
-            logger.info("接收到新的事件包:" + event)
+            logger.info("接收到新的事件包:" + str(event))
             # messagedb.toSet(MessageManager.getMessageId(event), event)  # redis存入消息
             await MessageManager.announce(MessageManager.getMessageId(event), event, "Event")
 
@@ -75,7 +75,7 @@ class Request:
         return json.loads(r.text)
 
 
-class CreateSession():
+class CreateSession:
     sessionKey = None
 
     def __init__(self, botqq: int, authKey: str, url: str):
@@ -153,12 +153,12 @@ class PluginManager:
 
 
 def main():
-    wsurl = "ws://127.0.0.1:8080"
-    botqq = 2125402216
+    wsurl = "ws://zhouxiang289.f3322.net:8080"
+    botqq = 2593267832
     authkey = "6397684399qq"
     pluginbase = PluginManager()
     pluginbase.loadAllPlugin()
-    bot = CreateSession(botqq, authkey, "http://127.0.0.1:8080")
+    bot = CreateSession(botqq, authkey, "http://zhouxiang289.f3322.net:8080")
     sessionkey = bot.getSessionKey()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(getEvent(wsurl, sessionkey), getMessage(wsurl, sessionkey)))
