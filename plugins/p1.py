@@ -1,11 +1,21 @@
-class Plugin:
+from plugins.__interface import *
+class Plugin(PluginBase):
+    def __init__(self):
+        super(Plugin,self).__init__()
+
     def onLoad(self):
         print("hello")
+
+    def onDisable(self):
+        pass
 
 
 class MessageRecv:
     def onMessage(self,messageid,message,type):
         print("yes")
+
+    def onEvent(self):
+        pass
 
 
 def getPluginClass():
