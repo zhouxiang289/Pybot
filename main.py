@@ -4,9 +4,11 @@ import asyncio
 import websockets
 import os
 import redis
+import sys
 
-pluginloaded = []
-pluginobj = []
+#pluginloaded = []
+#pluginobj = []
+pluginloaded = {}
 
 
 async def getMessage(wsurl: str, sessionkey: str):
@@ -28,7 +30,7 @@ async def getEvent(wsurl: str, sessionkey: str):
             event = json.loads(event)
             logger.info("接收到新的事件包:" + str(event))
             # messagedb.toSet(MessageManager.getMessageId(event), event)  # redis存入消息
-            MessageManager.announce(MessageManager.getMessageId(event), event, "Event")
+            EventManager.announce(EventManager.getMessageId(event), event, "Event")
 
 
 class logger:
@@ -99,26 +101,49 @@ class MessageManager:
 
     @staticmethod
     def announce(messageid, message, types):
-        for p in pluginobj:
-            p_class = p.getMessageRecvClass()
+        for p in list(pluginloaded.keys()):
+            p_mod = pluginloaded[p]
+            p_class = p_mod.getMessageRecvClass()
             p_obj = p_class()
             p_obj.onMessage(messageid, message, types)
 
 
+class EventManager(MessageManager):
+    @staticmethod
+    def getMessageId(message):
+        if "messageId" in message:
+            return message["messageId"]
+        elif "messageChain" in message:
+            return message["messageChain"][0]["id"]
+
+    @staticmethod
+    def announce(messageid, message, types):
+        for p in list(pluginloaded.keys()):
+            p_mod = pluginloaded[p]
+            p_class = p_mod.getMessageRecvClass()
+            p_obj = p_class()
+            p_obj.onEvent(messageid, message, types)
+
+
 class PluginManager:
     pluginslist = []
-    pluginloaded = []
-    pluginobj = []
 
     def __init__(self):
         logger.info("当前工作目录:" + os.getcwd())
         for filename in os.listdir(os.getcwd()+"\\plugins"):
             if filename.endswith(".py") and not filename.startswith("_"):
+                logger.info(filename)
                 self.pluginslist.append("plugins." + os.path.splitext(filename)[0])
                 logger.info(self.pluginslist)
+        Module_Dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        nowdir = os.getcwd()
+        sptdir = os.path.split(nowdir)
+        dirlst = list(sptdir)
+        dirlst.pop()
+        workdir = "\\".join(dirlst)
+        sys.path.append(Module_Dir)
+        sys.path.append(workdir)
 
-    def getPluginobj(self):
-        return self.pluginobj
 
     def loadAllPlugin(self):
         logger.info("开始加载所有插件")
@@ -127,15 +152,17 @@ class PluginManager:
             p_class = p_mod.getPluginClass()
             p_obj = p_class()
             p_obj.onLoad()
-            pluginloaded.append(p)
-            pluginobj.append(p_mod)
+            pluginloaded[p] = p_mod
             # 这里应该有错误处理
         logger.info("所有插件载入完成")
 
-    def __disableAllPlugin(self):
-        for p_obj in self.pluginobj:
+    def disableAllPlugin(self):
+        for p in list(pluginloaded.keys()):
+            p_mod = pluginloaded[p]
+            p_class = p_mod.getPluginClass()
+            p_obj = p_class()
             p_obj.onDisable()
-            self.pluginobj.remove(p_obj)
+            pluginloaded.pop(p)
         self.pluginloaded.clear()
 
     def __loadPlugin(self, pluginname):
