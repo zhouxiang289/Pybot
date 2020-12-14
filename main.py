@@ -6,8 +6,8 @@ import os
 import redis
 import sys
 
-#pluginloaded = []
-#pluginobj = []
+# pluginloaded = []
+# pluginobj = []
 pluginloaded = {}
 
 
@@ -19,7 +19,7 @@ async def getMessage(wsurl: str, sessionkey: str):
             message = json.loads(message)
             logger.info("接收到新的消息包:" + str(message))
             # messagedb.toSet(MessageManager.getMessageId(message), message)  # redis存入消息
-            MessageManager.announce(MessageManager.getMessageId(message), message, "Message")
+            MessageManager.announce(MessageManager.getMessageId(message), message)
 
 
 async def getEvent(wsurl: str, sessionkey: str):
@@ -30,7 +30,7 @@ async def getEvent(wsurl: str, sessionkey: str):
             event = json.loads(event)
             logger.info("接收到新的事件包:" + str(event))
             # messagedb.toSet(MessageManager.getMessageId(event), event)  # redis存入消息
-            EventManager.announce(EventManager.getMessageId(event), event, "Event")
+            EventManager.announce(EventManager.getMessageId(event), event)
 
 
 class logger:
@@ -105,7 +105,7 @@ class MessageManager:
             p_mod = pluginloaded[p]
             p_class = p_mod.getMessageRecvClass()
             p_obj = p_class()
-            p_obj.onMessage(messageid, message, types)
+            p_obj.onMessage(messageid, message)
 
 
 class EventManager(MessageManager):
@@ -122,7 +122,7 @@ class EventManager(MessageManager):
             p_mod = pluginloaded[p]
             p_class = p_mod.getMessageRecvClass()
             p_obj = p_class()
-            p_obj.onEvent(messageid, message, types)
+            p_obj.onEvent(messageid, message)
 
 
 class PluginManager:
@@ -130,7 +130,7 @@ class PluginManager:
 
     def __init__(self):
         logger.info("当前工作目录:" + os.getcwd())
-        for filename in os.listdir(os.getcwd()+"\\plugins"):
+        for filename in os.listdir(os.getcwd() + "\\plugins"):
             if filename.endswith(".py") and not filename.startswith("_"):
                 logger.info(filename)
                 self.pluginslist.append("plugins." + os.path.splitext(filename)[0])
@@ -143,7 +143,6 @@ class PluginManager:
         workdir = "\\".join(dirlst)
         sys.path.append(Module_Dir)
         sys.path.append(workdir)
-
 
     def loadAllPlugin(self):
         logger.info("开始加载所有插件")

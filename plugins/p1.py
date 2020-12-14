@@ -1,7 +1,9 @@
 from plugins.__interface import *
+
+
 class Plugin(PluginBase):
     def __init__(self):
-        super(Plugin,self).__init__()
+        super(Plugin, self).__init__()
 
     def onLoad(self):
         print("hello")
@@ -11,7 +13,7 @@ class Plugin(PluginBase):
 
 
 class MessageRecv:
-    def onMessage(self,messageid,message,type):
+    def onMessage(self, messageid, message):
         print("yes")
 
     def onEvent(self):
