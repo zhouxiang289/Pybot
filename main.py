@@ -16,10 +16,10 @@ async def getMessage(wsurl: str, sessionkey: str):
         logger.info("开始监听消息")
         while True:
             message = await websocket.recv()
-            message = json.loads(message)
-            logger.info("接收到新的消息包:" + str(message))
-            # messagedb.toSet(MessageManager.getMessageId(message), message)  # redis存入消息
-            MessageManager.announce(MessageManager.getMessageId(message), message)
+            newmessage = json.loads(message)
+            logger.info("接收到新的消息包:" + str(newmessage))
+            # messagedb.toSet(MessageManager.getMessageId(newmessage), newmessage)  # redis存入消息
+            MessageManager.announce(MessageManager.getMessageId(newmessage), newmessage)
 
 
 async def getEvent(wsurl: str, sessionkey: str):
@@ -27,10 +27,10 @@ async def getEvent(wsurl: str, sessionkey: str):
         logger.info("开始监听事件")
         while True:
             event = await websocket.recv()
-            event = json.loads(event)
-            logger.info("接收到新的事件包:" + str(event))
-            # messagedb.toSet(MessageManager.getMessageId(event), event)  # redis存入消息
-            EventManager.announce(EventManager.getMessageId(event), event)
+            newevent = json.loads(event)
+            logger.info("接收到新的事件包:" + str(newevent))
+            # messagedb.toSet(MessageManager.getMessageId(event), newevent)  # redis存入消息
+            EventManager.announce(EventManager.getMessageId(event), newevent)
 
 
 class logger:
